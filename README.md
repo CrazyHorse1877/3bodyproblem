@@ -4,6 +4,8 @@ An interactive 2D simulation of the gravitational three-body problem, packaged a
 
 Three point masses attract each other under Newtonian gravity. A handful of special starting arrangements produce orbits that repeat forever, but almost any disturbance sends the system into chaos. The simulation lets you pick those arrangements, nudge the bodies, change their masses, and watch what happens.
 
+<img width="945" height="809" alt="image" src="https://github.com/user-attachments/assets/6e17f71a-021e-4ea8-a938-e1708c234ecf" />
+
 ## Quick start
 
 Open `three-body.html` in any modern browser (Chrome, Firefox, Safari, Edge). That's it.
