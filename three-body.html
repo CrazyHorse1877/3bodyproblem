@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Three bodies</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@1,500;1,600&family=IBM+Plex+Sans:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E6ECF4; --chart:#F3F6FA; --ink:#1B2A4A; --muted:#5A6B8C; --rule:rgba(27,42,74,.14);
+  --b1:#C98A10; --b2:#C23B6E; --b3:#1E7FA8; --focus:#1E7FA8;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#0C1428; --chart:#111C36; --ink:#D8E0EE; --muted:#8A9ABA; --rule:rgba(216,224,238,.12);
+    --b1:#F2B134; --b2:#EF7AA3; --b3:#6EC5E9; --focus:#6EC5E9;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#0C1428; --chart:#111C36; --ink:#D8E0EE; --muted:#8A9ABA; --rule:rgba(216,224,238,.12);
+  --b1:#F2B134; --b2:#EF7AA3; --b3:#6EC5E9; --focus:#6EC5E9;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif}
+.wrap{max-width:1280px;margin:0 auto;padding:20px 20px 32px}
+header{display:flex;align-items:baseline;gap:18px;flex-wrap:wrap;margin-bottom:14px}
+h1{font:italic 600 clamp(34px,5vw,52px)/1 "Cormorant Garamond",Georgia,serif;margin:0;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:60ch}
+.layout{display:grid;grid-template-columns:1fr 290px;gap:18px}
+@media (max-width:860px){.layout{grid-template-columns:1fr}}
+.stage{position:relative;background:var(--chart);border:1px solid var(--rule);border-radius:14px;overflow:hidden;height:min(78vh,760px);min-height:380px;touch-action:none}
+canvas{display:block;width:100%;height:100%;cursor:grab}
+canvas.dragging{cursor:grabbing}
+.readout{position:absolute;left:14px;bottom:10px;color:var(--muted);font-size:13px;pointer-events:none;font-variant-numeric:tabular-nums}
+.hint{position:absolute;right:14px;bottom:10px;color:var(--muted);font-size:13px;pointer-events:none}
+aside{display:flex;flex-direction:column;gap:18px}
+section h2{font:italic 600 22px/1.1 "Cormorant Garamond",Georgia,serif;margin:0 0 8px}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-size:14px;color:var(--ink);background:transparent;border:1px solid var(--rule);border-radius:8px;padding:7px 12px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button.on{background:var(--ink);color:var(--chart);border-color:var(--ink)}
+button.primary{background:var(--ink);color:var(--chart);border-color:var(--ink);min-width:84px}
+:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+label{display:grid;grid-template-columns:1fr auto;align-items:center;gap:2px 10px;font-size:14px}
+label input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--ink)}
+label output{color:var(--muted);font-variant-numeric:tabular-nums}
+.body-label{display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.stack{display:flex;flex-direction:column;gap:10px}
+.check{display:flex;align-items:center;gap:8px;font-size:14px}
+.note{color:var(--muted);font-size:13px;margin:0}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Three bodies</h1>
+    <p>Three masses pulling on each other under Newtonian gravity. A few starting arrangements repeat forever; almost any nudge turns them chaotic.</p>
+  </header>
+  <div class="layout">
+    <div class="stage" id="stage">
+      <canvas id="cv" aria-label="Three-body simulation"></canvas>
+      <div class="readout" id="readout"></div>
+      <div class="hint">Drag a body to move it · scroll to zoom</div>
+    </div>
+    <aside>
+      <section>
+        <h2>Run</h2>
+        <div class="row">
+          <button class="primary" id="play">Pause</button>
+          <button id="reset">Restart</button>
+          <button id="clear">Clear trails</button>
+        </div>
+      </section>
+      <section>
+        <h2>Starting arrangement</h2>
+        <div class="row" id="presets">
+          <button data-p="eight" class="on">Figure eight</button>
+          <button data-p="lagrange">Triangle</button>
+          <button data-p="pyth">Pythagorean</button>
+          <button data-p="star">Star &amp; planets</button>
+          <button data-p="random">Random</button>
+        </div>
+      </section>
+      <section class="stack">
+        <h2>Masses</h2>
+        <label><span class="body-label"><span class="dot" style="background:var(--b1)"></span>Body A</span><output id="m0o"></output><input type="range" id="m0" min="0.05" max="6" step="0.05"></label>
+        <label><span class="body-label"><span class="dot" style="background:var(--b2)"></span>Body B</span><output id="m1o"></output><input type="range" id="m1" min="0.05" max="6" step="0.05"></label>
+        <label><span class="body-label"><span class="dot" style="background:var(--b3)"></span>Body C</span><output id="m2o"></output><input type="range" id="m2" min="0.05" max="6" step="0.05"></label>
+        <p class="note">Changing a mass mid-flight keeps positions and velocities, so the orbit usually breaks apart.</p>
+      </section>
+      <section class="stack">
+        <h2>View</h2>
+        <label>Speed<output id="spo"></output><input type="range" id="speed" min="0.1" max="4" step="0.1" value="1"></label>
+        <label>Trail length<output id="tro"></output><input type="range" id="trail" min="0" max="3000" step="50" value="900"></label>
+        <span class="check"><input type="checkbox" id="follow" checked><label for="follow" style="display:inline">Keep centre of mass in view</label></span>
+        <span class="check"><input type="checkbox" id="vec"><label for="vec" style="display:inline">Show velocity arrows</label></span>
+      </section>
+    </aside>
+  </div>
+</div>
+<script>
+(() => {
+const cv = document.getElementById('cv'), ctx = cv.getContext('2d');
+const stage = document.getElementById('stage');
+const G = 1, EPS2 = 1e-5;
+let bodies = [], trails = [[],[],[]], preset = 'eight', running = true;
+let simTime = 0, E0 = 0, scale = 180, cam = {x:0,y:0}, userZoom = 1;
+const colors = () => { const s = getComputedStyle(document.documentElement);
+  return { b:[s.getPropertyValue('--b1'),s.getPropertyValue('--b2'),s.getPropertyValue('--b3')].map(c=>c.trim()),
+           ink:s.getPropertyValue('--ink').trim(), rule:s.getPropertyValue('--rule').trim(), muted:s.getPropertyValue('--muted').trim() }; };
+let C = colors();
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => C = colors());
+
+const B = (m,x,y,vx,vy) => ({m,x,y,vx,vy});
+const presets = {
+  eight(){ const x=0.97000436,y=-0.24308753,vx=-0.93240737,vy=-0.86473146;
+    return [B(1,x,y,-vx/2,-vy/2), B(1,-x,-y,-vx/2,-vy/2), B(1,0,0,vx,vy)]; },
+  lagrange(){ const r=1, v=Math.sqrt(1/(Math.sqrt(3)*r));
+    return [0,1,2].map(i=>{ const a=Math.PI/2+i*2*Math.PI/3;
+      return B(1, r*Math.cos(a), r*Math.sin(a), -v*Math.sin(a), v*Math.cos(a)); }); },
+  pyth(){ const s=0.45; // scaled Burrau problem, 3-4-5 masses at rest
+    return [B(3,1*s,3*s,0,0), B(4,-2*s,-1*s,0,0), B(5,1*s,-1*s,0,0)].map(b=>{b.m*=s*s*s/(s*s*s);return b;}); },
+  star(){ const M=5, r1=1, r2=2.1, v1=Math.sqrt(M/r1), v2=Math.sqrt(M/r2);
+    return [B(M,0,0,0,0), B(0.05,r1,0,0,v1), B(0.15,-r2,0,0,-v2)]; },
+  random(){ const out=[]; for(let i=0;i<3;i++){ const a=Math.random()*Math.PI*2, r=0.5+Math.random();
+      out.push(B(0.6+Math.random()*1.4, r*Math.cos(a), r*Math.sin(a), (Math.random()-.5)*0.9, (Math.random()-.5)*0.9)); }
+    return out; }
+};
+
+function toCOMFrame(bs){
+  let M=0,px=0,py=0,cx=0,cy=0;
+  for(const b of bs){M+=b.m;px+=b.m*b.vx;py+=b.m*b.vy;cx+=b.m*b.x;cy+=b.m*b.y;}
+  for(const b of bs){b.vx-=px/M;b.vy-=py/M;b.x-=cx/M;b.y-=cy/M;}
+}
+function energy(bs){
+  let K=0,U=0;
+  for(let i=0;i<3;i++){const a=bs[i];K+=.5*a.m*(a.vx*a.vx+a.vy*a.vy);
+    for(let j=i+1;j<3;j++){const b=bs[j];U-=G*a.m*b.m/Math.sqrt((a.x-b.x)**2+(a.y-b.y)**2+EPS2);}}
+  return K+U;
+}
+function deriv(s, m){ // s = [x,y,vx,vy]*3
+  const d = new Float64Array(12);
+  for(let i=0;i<3;i++){ d[i*4]=s[i*4+2]; d[i*4+1]=s[i*4+3]; }
+  for(let i=0;i<3;i++) for(let j=i+1;j<3;j++){
+    const dx=s[j*4]-s[i*4], dy=s[j*4+1]-s[i*4+1];
+    const r2=dx*dx+dy*dy+EPS2, inv=G/(r2*Math.sqrt(r2));
+    d[i*4+2]+=m[j]*dx*inv; d[i*4+3]+=m[j]*dy*inv;
+    d[j*4+2]-=m[i]*dx*inv; d[j*4+3]-=m[i]*dy*inv;
+  }
+  return d;
+}
+function rk4(h){
+  const m=bodies.map(b=>b.m), s=new Float64Array(12);
+  bodies.forEach((b,i)=>{s[i*4]=b.x;s[i*4+1]=b.y;s[i*4+2]=b.vx;s[i*4+3]=b.vy;});
+  const add=(a,k,f)=>a.map((v,i)=>v+k[i]*f);
+  const k1=deriv(s,m), k2=deriv(add(s,k1,h/2),m), k3=deriv(add(s,k2,h/2),m), k4=deriv(add(s,k3,h),m);
+  bodies.forEach((b,i)=>{ const o=i*4, f=(n)=>s[o+n]+h/6*(k1[o+n]+2*k2[o+n]+2*k3[o+n]+k4[o+n]);
+    b.x=f(0);b.y=f(1);b.vx=f(2);b.vy=f(3); });
+}
+function adaptiveStep(){ // smaller steps during close encounters
+  let rmin=Infinity, vmax=0, M=0;
+  for(let i=0;i<3;i++){ M+=bodies[i].m; vmax=Math.max(vmax,Math.hypot(bodies[i].vx,bodies[i].vy));
+    for(let j=i+1;j<3;j++) rmin=Math.min(rmin,Math.hypot(bodies[i].x-bodies[j].x,bodies[i].y-bodies[j].y)); }
+  const tDyn = Math.sqrt(rmin*rmin*rmin/M);
+  return Math.max(1e-6, Math.min(0.004, 0.02*tDyn, 0.02*rmin/(vmax+1e-9)));
+}
+
+function load(name){
+  preset=name; bodies=presets[name](); toCOMFrame(bodies);
+  simTime=0; E0=energy(bodies); trails=[[],[],[]]; userZoom=1; fitScale();
+  bodies.forEach((b,i)=>{ const el=document.getElementById('m'+i); el.value=b.m; document.getElementById('m'+i+'o').textContent=b.m.toFixed(2); });
+  document.querySelectorAll('#presets button').forEach(bt=>bt.classList.toggle('on',bt.dataset.p===name));
+}
+function fitScale(){
+  const w=cv.clientWidth,h=cv.clientHeight; let ext=0.5;
+  for(const b of bodies) ext=Math.max(ext,Math.abs(b.x),Math.abs(b.y));
+  const base = preset==='star'?2.5:preset==='pyth'?1.8:ext*1.35;
+  scale = Math.min(w,h)/2/base;
+}
+
+function resize(){ const dpr=devicePixelRatio||1; cv.width=cv.clientWidth*dpr; cv.height=cv.clientHeight*dpr; ctx.setTransform(dpr,0,0,dpr,0,0); }
+new ResizeObserver(()=>{resize();}).observe(stage);
+
+const S = () => scale*userZoom;
+const toScreen = (x,y) => [cv.clientWidth/2+(x-cam.x)*S(), cv.clientHeight/2-(y-cam.y)*S()];
+const toWorld = (px,py) => [(px-cv.clientWidth/2)/S()+cam.x, -(py-cv.clientHeight/2)/S()+cam.y];
+
+function draw(){
+  const w=cv.clientWidth,h=cv.clientHeight; ctx.clearRect(0,0,w,h);
+  // star-chart rings around the origin of the frame
+  const [ox,oy]=toScreen(0,0); ctx.strokeStyle=C.rule; ctx.lineWidth=1;
+  let step=1; while(step*S()<60) step*=2; while(step*S()>160) step/=2;
+  const maxR=Math.hypot(w,h);
+  for(let r=step; r*S()<maxR; r+=step){ ctx.beginPath(); ctx.arc(ox,oy,r*S(),0,Math.PI*2); ctx.stroke(); }
+  ctx.beginPath(); ctx.moveTo(ox,0); ctx.lineTo(ox,h); ctx.moveTo(0,oy); ctx.lineTo(w,oy); ctx.stroke();
+
+  // trails, drawn in chunks with fading opacity
+  const chunks=24;
+  trails.forEach((t,i)=>{ if(t.length<2) return; ctx.strokeStyle=C.b[i]; ctx.lineWidth=1.6; ctx.lineJoin='round';
+    const per=Math.ceil(t.length/chunks);
+    for(let c=0;c<chunks;c++){ const a=c*per, e=Math.min(t.length-1,a+per); if(a>=e) break;
+      ctx.globalAlpha=0.08+0.8*((c+1)/chunks)**1.6; ctx.beginPath();
+      let [sx,sy]=toScreen(t[a][0],t[a][1]); ctx.moveTo(sx,sy);
+      for(let k=a+1;k<=e;k++){ [sx,sy]=toScreen(t[k][0],t[k][1]); ctx.lineTo(sx,sy); } ctx.stroke(); }
+    ctx.globalAlpha=1; });
+
+  const showV=document.getElementById('vec').checked;
+  bodies.forEach((b,i)=>{ const [x,y]=toScreen(b.x,b.y), r=radius(b);
+    if(showV){ const vs=0.35*S(); ctx.strokeStyle=C.ink; ctx.globalAlpha=.6; ctx.lineWidth=1.2;
+      const ex=x+b.vx*vs, ey=y-b.vy*vs, ang=Math.atan2(ey-y,ex-x);
+      ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(ex,ey);
+      ctx.moveTo(ex,ey); ctx.lineTo(ex-7*Math.cos(ang-.4),ey-7*Math.sin(ang-.4));
+      ctx.moveTo(ex,ey); ctx.lineTo(ex-7*Math.cos(ang+.4),ey-7*Math.sin(ang+.4)); ctx.stroke(); ctx.globalAlpha=1; }
+    const g=ctx.createRadialGradient(x,y,0,x,y,r*3); g.addColorStop(0,C.b[i]); g.addColorStop(1,'transparent');
+    ctx.globalAlpha=.35; ctx.fillStyle=g; ctx.beginPath(); ctx.arc(x,y,r*3,0,Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
+    ctx.fillStyle=C.b[i]; ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+  });
+  const dE = E0!==0 ? Math.abs((energy(bodies)-E0)/E0) : 0;
+  document.getElementById('readout').textContent = `t = ${simTime.toFixed(2)}   energy drift ${(dE*100).toExponential(1)}%`;
+}
+const radius = b => 4 + 4*Math.cbrt(b.m);
+
+// interaction
+let drag=null;
+function pick(px,py){ let best=null,bd=Infinity;
+  bodies.forEach((b,i)=>{ const [x,y]=toScreen(b.x,b.y), d=Math.hypot(x-px,y-py); if(d<Math.max(18,radius(b)+8)&&d<bd){bd=d;best=i;} });
+  return best; }
+cv.addEventListener('pointerdown',e=>{ const r=cv.getBoundingClientRect(), i=pick(e.clientX-r.left,e.clientY-r.top);
+  if(i!==null){ drag=i; cv.setPointerCapture(e.pointerId); cv.classList.add('dragging'); } });
+cv.addEventListener('pointermove',e=>{ if(drag===null) return; const r=cv.getBoundingClientRect();
+  const [x,y]=toWorld(e.clientX-r.left,e.clientY-r.top); bodies[drag].x=x; bodies[drag].y=y; trails[drag]=[]; });
+const endDrag=()=>{ if(drag!==null){ drag=null; cv.classList.remove('dragging'); E0=energy(bodies); } };
+cv.addEventListener('pointerup',endDrag); cv.addEventListener('pointercancel',endDrag);
+cv.addEventListener('wheel',e=>{ e.preventDefault(); userZoom*=Math.exp(-e.deltaY*0.0012); userZoom=Math.min(20,Math.max(0.05,userZoom)); },{passive:false});
+
+// controls
+const playBtn=document.getElementById('play');
+playBtn.onclick=()=>{ running=!running; playBtn.textContent=running?'Pause':'Play'; };
+document.getElementById('reset').onclick=()=>load(preset);
+document.getElementById('clear').onclick=()=>{trails=[[],[],[]];};
+document.querySelectorAll('#presets button').forEach(bt=>bt.onclick=()=>load(bt.dataset.p));
+[0,1,2].forEach(i=>{ const el=document.getElementById('m'+i);
+  el.oninput=()=>{ bodies[i].m=+el.value; document.getElementById('m'+i+'o').textContent=(+el.value).toFixed(2); E0=energy(bodies); }; });
+const speed=document.getElementById('speed'), trail=document.getElementById('trail');
+const syncOut=()=>{ document.getElementById('spo').textContent=(+speed.value).toFixed(1)+'×'; document.getElementById('tro').textContent=trail.value; };
+speed.oninput=trail.oninput=syncOut; syncOut();
+
+let last=performance.now(), trailAcc=0;
+function frame(now){
+  const dtReal=Math.min(0.05,(now-last)/1000); last=now;
+  if(running && drag===null){
+    let target=dtReal*+speed.value*1.2, done=0, guard=0;
+    while(done<target && guard++<20000){ const h=Math.min(adaptiveStep(),target-done); rk4(h); done+=h;
+      trailAcc+=h; if(trailAcc>0.008){ trailAcc=0; const L=+trail.value;
+        bodies.forEach((b,i)=>{ trails[i].push([b.x,b.y]); if(trails[i].length>L) trails[i].splice(0,trails[i].length-L); }); } }
+    simTime+=done;
+  }
+  if(document.getElementById('follow').checked){
+    let M=0,cx=0,cy=0; for(const b of bodies){M+=b.m;cx+=b.m*b.x;cy+=b.m*b.y;}
+    cam.x+=(cx/M-cam.x)*0.1; cam.y+=(cy/M-cam.y)*0.1;
+  }
+  draw(); requestAnimationFrame(frame);
+}
+resize(); load('eight');
+if(matchMedia('(prefers-reduced-motion: reduce)').matches){ running=false; playBtn.textContent='Play'; }
+requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
